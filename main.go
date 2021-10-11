@@ -5,7 +5,10 @@ import (
 	"os"
 	"product-api/controller"
 	"product-api/db"
+	"product-api/middleware"
+	"time"
 
+	jwt "github.com/appleboy/gin-jwt/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -21,11 +24,42 @@ func main() {
 
 	db.SetupDatabaseConnection()
 
-	r.POST("/product", controller.PostProduct)
-	r.GET("/product", controller.GetProduct)
-	r.GET("/product/:id", controller.GetProductByID)
-	r.PUT("/product/:id", controller.UpdateProductByID)
-	r.DELETE("/product/:id", controller.DeleteProductByID)
+	authMiddleware, err := jwt.New(&jwt.GinJWTMiddleware{
+		Realm:           "product-api",
+		Key:             []byte("secret key"),
+		Timeout:         time.Hour,
+		MaxRefresh:      time.Hour,
+		IdentityKey:     middleware.IdentityKey,
+		PayloadFunc:     middleware.PayloadFunc,
+		IdentityHandler: middleware.IdentityHandler,
+		Authenticator:   middleware.Authenticator,
+		Authorizator:    middleware.Authorizator,
+		Unauthorized:    middleware.Unauthorized,
+		TokenLookup:     "header: Authorization, query: token, cookie: jwt",
+		TokenHeadName:   "Bearer",
+	})
+
+	if err != nil {
+		log.Fatal("JWT Error:" + err.Error())
+	}
+
+	errInit := authMiddleware.MiddlewareInit()
+	if errInit != nil {
+		log.Fatal("authMiddleware.MiddlewareInit() Error:" + errInit.Error())
+	}
+
+	r.POST("/register", controller.Register)
+	r.POST("/login", authMiddleware.LoginHandler)
+
+	auth := r.Group("/auth")
+	auth.Use(authMiddleware.MiddlewareFunc())
+	{
+		auth.POST("/product", controller.PostProduct)
+		auth.GET("/product", controller.GetAllProducts)
+		auth.GET("/product/:id", controller.GetProductByID)
+		auth.PUT("/product/:id", controller.UpdateProductByID)
+		auth.DELETE("/product/:id", controller.DeleteProductByID)
+	}
 
 	log.Fatal(r.Run(":" + port))
 }

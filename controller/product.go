@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func GetProduct(c *gin.Context) {
+func GetAllProducts(c *gin.Context) {
 	var product []model.Product
 	db.DB.Find(&product)
 
